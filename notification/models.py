@@ -20,26 +20,26 @@ class LanguageStoreNotAvailable(Exception):
 
 
 class NoticeType(models.Model):
-    
+
     label = models.CharField(_("label"), max_length=40)
     display = models.CharField(_("display"), max_length=50)
     description = models.CharField(_("description"), max_length=100)
-    
+
     # by default only on for media with sensitivity less than or equal to this number
     default = models.IntegerField(_("default"))
-    
+
     def __unicode__(self):
         return self.label
-    
+
     class Meta:
         verbose_name = _("notice type")
         verbose_name_plural = _("notice types")
-    
+
     @classmethod
     def create(cls, label, display, description, default=2, verbosity=1):
         """
         Creates a new NoticeType.
-        
+
         This is intended to be used by other apps as a post_syncdb manangement step.
         """
         try:
@@ -66,6 +66,7 @@ class NoticeType(models.Model):
 
 NOTIFICATION_BACKENDS = backends.load_backends()
 
+
 NOTICE_MEDIA = []
 NOTICE_MEDIA_DEFAULTS = {}
 for key, backend in NOTIFICATION_BACKENDS.items():
@@ -79,17 +80,17 @@ class NoticeSetting(models.Model):
     Indicates, for a given user, whether to send notifications
     of a given type to a given medium.
     """
-    
+
     user = models.ForeignKey(User, verbose_name=_("user"))
     notice_type = models.ForeignKey(NoticeType, verbose_name=_("notice type"))
     medium = models.CharField(_("medium"), max_length=1, choices=NOTICE_MEDIA)
     send = models.BooleanField(_("send"))
-    
+
     class Meta:
         verbose_name = _("notice setting")
         verbose_name_plural = _("notice settings")
         unique_together = ("user", "notice_type", "medium")
-    
+
     @classmethod
     def for_user(cls, user, notice_type, medium):
         try:
@@ -99,6 +100,17 @@ class NoticeSetting(models.Model):
             setting = cls(user=user, notice_type=notice_type, medium=medium, send=default)
             setting.save()
             return setting
+
+    @classmethod
+    def set_user_default_notice_settings(cls,user,medium):
+        """
+        Set default notice settings upon creation a new profile
+        """
+        notice_types = NoticeType.objects.all()
+
+        for notice_type in notice_types:
+            notice_setting = cls(user=user, notice_type=notice_type, medium=medium, send=True)
+            notice_setting.save()
 
 
 class NoticeQueueBatch(models.Model):
@@ -130,22 +142,23 @@ def get_notification_language(user):
 def send_now(users, label, extra_context=None, sender=None):
     """
     Creates a new notice.
-    
+
     This is intended to be how other apps create new notices.
-    
+
     notification.send(user, "friends_invite_sent", {
         "spam": "eggs",
         "foo": "bar",
     )
     """
+
     sent = False
     if extra_context is None:
         extra_context = {}
-    
+
     notice_type = NoticeType.objects.get(label=label)
-    
+
     current_language = get_language()
-    
+
     for user in users:
         # get user language for user from language store defined in
         # NOTIFICATION_LANGUAGE_MODULE setting
@@ -153,16 +166,16 @@ def send_now(users, label, extra_context=None, sender=None):
             language = get_notification_language(user)
         except LanguageStoreNotAvailable:
             language = None
-        
+
         if language is not None:
             # activate the user's language
             activate(language)
-        
+
         for backend in NOTIFICATION_BACKENDS.values():
             if backend.can_send(user, notice_type):
                 backend.deliver(user, sender, notice_type, extra_context)
                 sent = True
-    
+
     # reset environment to original language
     activate(current_language)
     return sent
