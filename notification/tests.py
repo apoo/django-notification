@@ -1,5 +1,5 @@
 from django.test import TestCase
-from django.contrib.auth.models import User
+from django.contrib.auth import get_user_model
 
 from notification.models import NoticeSetting,NoticeType
 
@@ -11,7 +11,7 @@ class NoticeSettingTest(TestCase):
         """
         Initial Setup for the unit test
         """
-        self.user = User()
+        self.user = get_user_model()()
         self.user.username = "blaah"
         self.user.email = "blaah@example.com"
         self.user.set_password("blaah")
